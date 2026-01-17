@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HSC Management 2nd Paper - Flashcards</title>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&amp;display=swap" rel="stylesheet" />
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <style>
+        :root { --primary: #10b981; --bg: #0f172a; --card-bg: #1e293b; --accent: #38bdf8; --text: #f8fafc; }
+        
+        /* ---------------------------------
+           PDF / PRINT STYLING (উন্নত বিন্যাস)
+        ------------------------------------ */
+        @media print {
+            @page { margin: 2cm; }
+            body { background: white !important; color: #000 !important; height: auto !important; overflow: visible !important; }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            
+            .pdf-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #10b981; padding-bottom: 10px; }
+            .pdf-header h1 { margin: 0; font-size: 24px; color: #10b981 !important; }
+            .pdf-header p { margin: 5px 0; font-size: 16px; color: #555 !important; }
+
+            .q-container { margin-bottom: 20px; page-break-inside: avoid; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+            .q-title { font-weight: 700; color: #000; display: block; margin-bottom: 5px; font-size: 16px; }
+            .a-content { color: #333; display: block; padding-left: 20px; font-size: 15px; line-height: 1.6; }
+            
+            .footer-text { position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 10px; color: #aaa; }
+        }
+
+        /* ---------------------------------
+           APP STYLING (অপরিবর্তিত)
+        ------------------------------------ */
+        body { font-family: 'Hind Siliguri', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; touch-action: none; }
+        .print-only { display: none; }
+        .header { margin-bottom: 10px; z-index: 10; display: flex; flex-direction: column; gap: 8px; }
+        select { padding: 12px; border-radius: 12px; border: 2px solid var(--primary); background: var(--card-bg); color: white; width: 310px; font-family: 'Hind Siliguri'; outline: none; cursor: pointer; }
+        
+        .pdf-btn { background: #e11d48; color: white; border: none; padding: 12px; border-radius: 10px; font-family: 'Hind Siliguri'; font-weight: bold; cursor: pointer; transition: 0.3s; width: 310px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .pdf-btn:hover { background: #be123c; transform: translateY(-2px); }
+
+        .card-container { position: relative; width: 340px; height: 220px; perspective: 1000px; }
+        .card { width: 100%; height: 100%; position: absolute; transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
+        .card.is-flipped { transform: rotateY(180deg); }
+        .face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 20px; padding: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.5); background: var(--card-bg); box-sizing: border-box; }
+        .front { border-top: 6px solid var(--primary); }
+        .back { border-top: 6px solid var(--accent); transform: rotateY(180deg); }
+        .text { font-size: 1.1rem; font-weight: 600; line-height: 1.5; margin: 0; }
+        .counter { margin-top: 15px; font-weight: bold; color: var(--primary); font-size: 0.9rem; }
+        
+        #adminTrigger { position: fixed; bottom: 0; right: 0; width: 50px; height: 50px; cursor: pointer; z-index: 1000; opacity: 0; }
+        #adminPanel { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.98); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
+        .edit-box { background: #1e293b; padding: 20px; border-radius: 15px; width: 100%; max-width: 380px; border: 1px solid var(--primary); }
+        textarea { width: 100%; padding: 10px; border-radius: 8px; background: #0f172a; color: white; margin-bottom: 10px; border: 1px solid #334155; font-family: 'Hind Siliguri'; resize: none; box-sizing: border-box; }
+        .btn { width: 100%; padding: 12px; margin-top: 8px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; font-family: 'Hind Siliguri'; transition: 0.3s; }
+    </style>
+</head>
+<body>
+
+    <div id="printArea" class="print-only">
+        <div class="pdf-header">
+            <h1>HSC ব্যবস্থাপনা ২য় পত্র (ফাইনাল সাজেশন)</h1>
+            <p id="printTitle">অধ্যায়: লোড হচ্ছে...</p>
+        </div>
+        <div id="printList"></div>
+        <div class="footer-text">Generated by HSC Management 2.0 Flashcards</div>
+    </div>
+
+    <div class="header no-print">
+        <select id="chapMenu" onchange="loadChapter()">
+            <option value="m1">১ম: ব্যবস্থাপনার ধারণা</option>
+            <option value="m2">২য়: ব্যবস্থাপনার নীতি</option>
+            <option value="m3">৩য়: পরিকল্পনা প্রণয়ন</option>
+            <option value="m4">৪র্থ: সংগঠিতকরণ</option>
+            <option value="m5">৫ম: কর্মীসংস্থান</option>
+            <option value="m6">৬ষ্ঠ: নেতৃত্ব</option>
+            <option value="m7">৭ম: প্রেষণা</option>
+            <option value="m8">৮ম: যোগাযোগ</option>
+            <option value="m9">৯ম: সমন্বয় সাধন</option>
+            <option value="m10">১০ম: নিয়ন্ত্রণ</option>
+        </select>
+        <button class="pdf-btn" onclick="downloadAsPDF()">
+            <span>📄</span> প্রফেশনাল PDF ডাউনলোড
+        </button>
+    </div>
+
+    <div class="card-container no-print" id="swipeArea">
+        <div class="card" id="mainCard" onclick="this.classList.toggle('is-flipped')">
+            <div class="face front"><p class="text" id="qText">তথ্য লোড হচ্ছে...</p></div>
+            <div class="face back"><p class="text" id="aText">লোডিং...</p></div>
+        </div>
+    </div>
+
+    <div class="counter no-print" id="count">0 / 0</div>
+
+    <div id="adminTrigger" class="no-print" onclick="openAdmin()"></div>
+
+    <div id="adminPanel" class="no-print">
+        <div class="edit-box">
+            <textarea id="editQ" rows="3" placeholder="প্রশ্ন"></textarea>
+            <textarea id="editA" rows="3" placeholder="উত্তর"></textarea>
+            <button class="btn" style="background:var(--accent)" onclick="handleSave(false)">আপডেট করুন</button>
+            <button class="btn" style="background:var(--primary)" onclick="handleSave(true)">নতুন কার্ড যোগ</button>
+            <button class="btn" style="background:#ef4444; color:white;" onclick="handleDelete()">মুছে ফেলুন</button>
+            <button class="btn" style="background:#64748b; color:white;" onclick="closeAdmin()">বন্ধ করুন</button>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAc8yJrpq_5mG1lg075c_994DrCeLSxEl8",
+            authDomain: "hsc-flash-card.firebaseapp.com",
+            databaseURL: "https://hsc-flash-card-default-rtdb.firebaseio.com",
+            projectId: "hsc-flash-card",
+            storageBucket: "hsc-flash-card.firebasestorage.app",
+            messagingSenderId: "192367317511",
+            appId: "1:192367317511:web:a60666bae2dd968fc690a2"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        let currentCards = [], curIdx = 0, touchStartX = 0;
+
+        function loadChapter() {
+            const chap = document.getElementById('chapMenu').value;
+            db.ref('mgmt_final_300/' + chap).on('value', (snapshot) => {
+                currentCards = [];
+                snapshot.forEach(child => {
+                    currentCards.push({ id: child.key, ...child.val() });
+                });
+                curIdx = 0;
+                updateUI();
+            });
+        }
+
+        function updateUI() {
+            if(currentCards.length > 0) {
+                document.getElementById('qText').innerText = currentCards[curIdx].q;
+                document.getElementById('aText').innerText = currentCards[curIdx].a;
+                document.getElementById('count').innerText = `${curIdx + 1} / ${currentCards.length}`;
+            }
+            document.getElementById('mainCard').classList.remove('is-flipped');
+        }
+
+        function downloadAsPDF() {
+            if(currentCards.length === 0) return alert("ডেটা লোড হওয়া পর্যন্ত অপেক্ষা করুন");
+            
+            const chapName = document.getElementById('chapMenu').options[document.getElementById('chapMenu').selectedIndex].text;
+            document.getElementById('printTitle').innerText = "অধ্যায়: " + chapName;
+            
+            const printList = document.getElementById('printList');
+            printList.innerHTML = ''; 
+
+            currentCards.forEach((card, index) => {
+                const item = `
+                    <div class="q-container">
+                        <span class="q-title">${index + 1}. প্রশ্ন: ${card.q}</span>
+                        <span class="a-content">উত্তর: ${card.a}</span>
+                    </div>`;
+                printList.innerHTML += item;
+            });
+
+            window.print();
+        }
+
+        // সোয়াইপ এবং এডমিন ফাংশন (অপরিবর্তিত)
+        const swipeArea = document.getElementById('swipeArea');
+        swipeArea.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+        swipeArea.addEventListener('touchend', e => {
+            const diff = touchStartX - e.changedTouches[0].clientX;
+            if (Math.abs(diff) > 40) {
+                if (diff > 0 && curIdx < currentCards.length - 1) curIdx++;
+                else if (diff < 0 && curIdx > 0) curIdx--;
+                updateUI();
+            }
+        });
+
+        function openAdmin() {
+            if(prompt("পাসওয়ার্ড:") === "azaz9339") {
+                document.getElementById('adminPanel').style.display = 'flex';
+                if(currentCards[curIdx]) {
+                    document.getElementById('editQ').value = currentCards[curIdx].q;
+                    document.getElementById('editA').value = currentCards[curIdx].a;
+                }
+            }
+        }
+
+        function handleSave(isNew) {
+            const chap = document.getElementById('chapMenu').value;
+            const data = { q: document.getElementById('editQ').value, a: document.getElementById('editA').value };
+            if(isNew) db.ref('mgmt_final_300/' + chap).push(data);
+            else db.ref('mgmt_final_300/' + chap + '/' + currentCards[curIdx].id).update(data);
+            alert("সফল হয়েছে!"); closeAdmin();
+        }
+
+        function handleDelete() {
+            if(confirm("মুছে ফেলবেন?")) {
+                db.ref('mgmt_final_300/' + document.getElementById('chapMenu').value + '/' + currentCards[curIdx].id).remove();
+                closeAdmin();
+            }
+        }
+
+        function closeAdmin() { document.getElementById('adminPanel').style.display = 'none'; }
+        window.onload = loadChapter;
+    </script>
+</body>
+</html>
